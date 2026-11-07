@@ -1,0 +1,18 @@
+# Binaries
+/dockerview
+/dist/
+*.exe
+*.test
+*.out
+
+# Runtime data
+/data/compose/*.yml
+/data/compose/*.yaml
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Stray test data
+internal/server/data/

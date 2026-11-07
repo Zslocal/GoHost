@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DockerView · Docker 可视化面板</title>
+<link rel="stylesheet" href="/vendor/xterm.css" />
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">DV</div>
+      <div>
+        <div class="brand-name">DockerView</div>
+        <div class="brand-sub">容器管理面板</div>
+      </div>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-view="dashboard">
+        <span class="nav-ico">◧</span><span>仪表盘</span>
+      </button>
+      <button class="nav-item" data-view="containers">
+        <span class="nav-ico">▤</span><span>容器</span><span class="nav-badge" id="badge-containers">0</span>
+      </button>
+      <button class="nav-item" data-view="images">
+        <span class="nav-ico">◈</span><span>镜像</span><span class="nav-badge" id="badge-images">0</span>
+      </button>
+      <button class="nav-item" data-view="networks">
+        <span class="nav-ico">⌁</span><span>网络</span>
+      </button>
+      <button class="nav-item" data-view="volumes">
+        <span class="nav-ico">▣</span><span>数据卷</span>
+      </button>
+      <button class="nav-item" data-view="compose">
+        <span class="nav-ico">⛭</span><span>Compose</span>
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="engine-pill" id="engine-pill"><span class="dot"></span><span id="engine-text">连接中…</span></div>
+      <div class="meta-line" id="host-meta">—</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="view-title">仪表盘</h1>
+        <p class="subtitle" id="view-sub">宿主机与 Docker 资源实时概览</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="live" id="live-indicator"><span class="dot"></span>实时</div>
+        <button class="btn ghost" id="refresh-btn">刷新</button>
+        <button class="btn primary" id="quick-create">新建容器</button>
+      </div>
+    </header>
+
+    <section class="view" id="view-dashboard">
+      <div class="stat-grid">
+        <article class="stat-card">
+          <header><span>CPU 使用率</span><span class="stat-ico">◉</span></header>
+          <div class="stat-value"><span id="cpu-value">—</span><small>%</small></div>
+          <div class="bar"><i id="cpu-bar"></i></div>
+          <footer id="cpu-foot">—</footer>
+        </article>
+        <article class="stat-card">
+          <header><span>内存</span><span class="stat-ico">▤</span></header>
+          <div class="stat-value"><span id="mem-value">—</span><small>%</small></div>
+          <div class="bar"><i id="mem-bar"></i></div>
+          <footer id="mem-foot">—</footer>
+        </article>
+        <article class="stat-card">
+          <header><span>磁盘</span><span class="stat-ico">▣</span></header>
+          <div class="stat-value"><span id="disk-value">—</span><small>%</small></div>
+          <div class="bar"><i id="disk-bar"></i></div>
+          <footer id="disk-foot">—</footer>
+        </article>
+        <article class="stat-card">
+          <header><span>网络吞吐</span><span class="stat-ico">⇅</span></header>
+          <div class="stat-value small"><span id="net-value">—</span></div>
+          <footer id="net-foot">—</footer>
+        </article>
+      </div>
+
+      <div class="grid-2">
+        <article class="panel">
+          <header class="panel-head">
+            <h2>资源曲线</h2>
+            <div class="legend"><span class="lg cpu">CPU</span><span class="lg mem">内存</span></div>
+          </header>
+          <canvas id="resource-chart" height="220"></canvas>
+        </article>
+        <article class="panel">
+          <header class="panel-head"><h2>系统信息</h2></header>
+          <div class="kv" id="sys-info"></div>
+        </article>
+      </div>
+
+      <div class="grid-2">
+        <article class="panel">
+          <header class="panel-head"><h2>磁盘挂载</h2></header>
+          <div class="table-wrap"><table class="table" id="disk-table">
+            <thead><tr><th>挂载点</th><th>文件系统</th><th>已用</th><th>总量</th><th>使用率</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </article>
+        <article class="panel">
+          <header class="panel-head"><h2>网络接口</h2></header>
+          <div class="table-wrap"><table class="table" id="net-table">
+            <thead><tr><th>接口</th><th>接收</th><th>发送</th><th>速率</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </article>
+      </div>
+
+      <article class="panel">
+        <header class="panel-head">
+          <h2>容器概况</h2>
+          <a class="link" id="goto-containers">查看全部 →</a>
+        </header>
+        <div class="container-summary" id="container-summary"></div>
+      </article>
+    </section>
+
+    <section class="view hidden" id="view-containers">
+      <div class="toolbar">
+        <input class="input search" id="container-search" placeholder="按名称、镜像或端口搜索…" />
+        <div class="segmented" id="container-filter">
+          <button data-filter="all" class="active">全部</button>
+          <button data-filter="running">运行中</button>
+          <button data-filter="exited">已停止</button>
+        </div>
+        <label class="check"><input type="checkbox" id="auto-refresh-containers" checked /> 自动刷新</label>
+      </div>
+      <div class="panel">
+        <div class="table-wrap"><table class="table" id="container-table">
+          <thead><tr><th>状态</th><th>名称</th><th>镜像</th><th>端口</th><th>网络</th><th>创建</th><th class="right">操作</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="empty hidden" id="container-empty">暂无容器</div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-images">
+      <div class="toolbar">
+        <input class="input search" id="image-search" placeholder="搜索镜像…" />
+        <button class="btn primary" id="pull-image-btn">拉取镜像</button>
+      </div>
+      <div class="panel">
+        <div class="table-wrap"><table class="table" id="image-table">
+          <thead><tr><th>仓库标签</th><th>镜像 ID</th><th>大小</th><th>创建时间</th><th class="right">操作</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <div class="empty hidden" id="image-empty">暂无镜像</div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-networks">
+      <div class="toolbar">
+        <span class="toolbar-title">Docker 网络</span>
+        <button class="btn primary" id="create-network-btn">新建网络</button>
+      </div>
+      <div class="panel">
+        <div class="table-wrap"><table class="table" id="network-table">
+          <thead><tr><th>名称</th><th>驱动</th><th>作用域</th><th>关联容器</th><th class="right">操作</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-volumes">
+      <div class="toolbar">
+        <span class="toolbar-title">数据卷</span>
+        <button class="btn primary" id="create-volume-btn">新建数据卷</button>
+      </div>
+      <div class="panel">
+        <div class="table-wrap"><table class="table" id="volume-table">
+          <thead><tr><th>名称</th><th>驱动</th><th>挂载点</th><th>状态</th><th class="right">操作</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </section>
+
+    <section class="view hidden" id="view-compose">
+      <div class="compose-layout">
+        <div class="panel">
+          <header class="panel-head">
+            <h2>项目</h2>
+            <button class="btn ghost small" id="compose-refresh">刷新</button>
+          </header>
+          <div id="compose-projects" class="project-list"></div>
+        </div>
+        <div class="panel">
+          <header class="panel-head">
+            <h2>docker-compose.yml</h2>
+            <div class="head-actions">
+              <select class="input select" id="compose-template">
+                <option value="">加载模板…</option>
+                <option value="web">Nginx + Redis</option>
+                <option value="stack">Web + Postgres + Redis</option>
+                <option value="monitoring">Grafana 监控</option>
+              </select>
+              <button class="btn ghost small" id="compose-load-file">打开已保存</button>
+            </div>
+          </header>
+          <div class="compose-editor">
+            <input class="input" id="compose-name" placeholder="项目名称 (project name)" />
+            <textarea class="code" id="compose-content" spellcheck="false" placeholder="在此粘贴 docker-compose.yml 内容…"></textarea>
+            <div class="compose-actions">
+              <span class="hint" id="compose-hint">支持 services / networks / volumes，自动解析依赖顺序</span>
+              <button class="btn primary" id="compose-deploy">部署项目</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="drawer-backdrop hidden" id="drawer-backdrop"></div>
+<aside class="drawer hidden" id="container-drawer">
+  <header class="drawer-head">
+    <div>
+      <h2 id="drawer-title">容器详情</h2>
+      <div class="drawer-sub" id="drawer-sub">—</div>
+    </div>
+    <button class="icon-btn" id="drawer-close">✕</button>
+  </header>
+  <div class="drawer-body">
+    <div class="drawer-tabs" id="drawer-tabs">
+      <button data-tab="overview" class="active">概览</button>
+      <button data-tab="logs">日志</button>
+      <button data-tab="terminal">终端</button>
+    </div>
+    <div class="drawer-pane" id="pane-overview">
+      <div class="stat-grid mini">
+        <div class="mini-card"><span>CPU</span><b id="dc-cpu">—</b></div>
+        <div class="mini-card"><span>内存</span><b id="dc-mem">—</b></div>
+        <div class="mini-card"><span>网络 I/O</span><b id="dc-net">—</b></div>
+        <div class="mini-card"><span>进程</span><b id="dc-pids">—</b></div>
+      </div>
+      <div class="kv" id="drawer-kv"></div>
+      <div class="drawer-actions" id="drawer-actions"></div>
+      <h3 class="section-title">挂载</h3>
+      <div id="drawer-mounts" class="chip-list"></div>
+      <h3 class="section-title">环境变量</h3>
+      <pre class="code-block" id="drawer-env"></pre>
+    </div>
+    <div class="drawer-pane hidden" id="pane-logs">
+      <div class="log-toolbar">
+        <label class="check"><input type="checkbox" id="log-timestamps" /> 时间戳</label>
+        <input class="input tiny" id="log-tail" type="number" value="200" min="10" />
+        <button class="btn ghost small" id="log-restart">重新连接</button>
+        <span class="hint" id="log-status">未连接</span>
+      </div>
+      <pre class="logs" id="log-output"></pre>
+    </div>
+    <div class="drawer-pane hidden" id="pane-terminal">
+      <div class="terminal-shell">
+        <div id="terminal-host"></div>
+      </div>
+      <div class="hint">点击终端区域后即可输入命令。支持 resize 自适应。</div>
+    </div>
+  </div>
+</aside>
+
+<div class="modal-backdrop hidden" id="modal-backdrop">
+  <div class="modal" id="modal">
+    <header class="modal-head">
+      <h2 id="modal-title">标题</h2>
+      <button class="icon-btn" id="modal-close">✕</button>
+    </header>
+    <div class="modal-body" id="modal-body"></div>
+    <footer class="modal-foot" id="modal-foot"></footer>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
