@@ -1,0 +1,9 @@
+.git
+.github
+data
+dist
+*.exe
+*.test
+*.out
+dockerview
+README.md
