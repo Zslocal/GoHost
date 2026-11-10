@@ -16,3 +16,4 @@
 
 # Stray test data
 internal/server/data/
+.workbuddy/
