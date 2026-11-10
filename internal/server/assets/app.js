@@ -5,6 +5,7 @@
     view: "dashboard",
     filter: "all",
     containers: [],
+    containerUsage: {},
     images: [],
     networks: [],
     volumes: [],
@@ -54,6 +55,19 @@
   const fmtTime = (unix) => {
     if (!unix) return "—";
     return new Date(unix * 1000).toLocaleString("zh-CN", { hour12: false });
+  };
+
+  // 容器表专用：固定列宽下带秒放不下，精确到分钟即可，完整时间放 title。
+  const fmtTimeShort = (unix) => {
+    if (!unix) return "—";
+    return new Date(unix * 1000).toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
   };
 
   const esc = (s) =>
@@ -399,9 +413,70 @@
       $("#badge-containers").textContent = list.length;
       renderContainers();
       renderContainerSummary();
+      // 指标单独取：列表先出来，CPU / 内存列随后填上。
+      refreshContainerUsage();
     } catch (err) {
       if (!silent) toast(`容器加载失败: ${err.message}`, "err");
     }
+  }
+
+  // 批量拉运行中容器的 CPU / 内存。5 秒一轮的自动刷新可能比 daemon 采集快，
+  // 用 pending 标志避免请求堆叠。
+  let usagePending = false;
+  async function refreshContainerUsage() {
+    if (usagePending) return;
+    const running = state.containers.filter((c) => c.state === "running");
+    if (!running.length) {
+      state.containerUsage = {};
+      applyContainerUsage();
+      return;
+    }
+    usagePending = true;
+    try {
+      const res = await api("/api/containers/usage");
+      state.containerUsage = (res && res.usage) || {};
+    } catch (_) {
+      // 取不到就保留上一帧，不打断列表
+    } finally {
+      usagePending = false;
+    }
+    applyContainerUsage();
+  }
+
+  // 只改两列的内容，不整体重绘，避免把正在点的按钮换掉。
+  function applyContainerUsage() {
+    $$("#container-table tbody tr").forEach((tr) => {
+      const c = state.containers.find((x) => x.id === tr.dataset.id);
+      if (!c) return;
+      const u = state.containerUsage[c.id];
+      const cpuCell = tr.querySelector("td.usage-cpu");
+      const memCell = tr.querySelector("td.usage-mem");
+      if (cpuCell) cpuCell.innerHTML = usageCpuHTML(c, u);
+      if (memCell) memCell.innerHTML = usageMemHTML(c, u);
+    });
+  }
+
+  // 已停止的容器没有指标，显示破折号；运行中但还没取到显示省略号。
+  function usageCpuHTML(c, u) {
+    if (c.state !== "running") return `<span class="usage-na">—</span>`;
+    if (!u) return `<span class="usage-na">…</span>`;
+    const v = Number(u.cpuPercent || 0);
+    const cls = v >= 50 ? "hot" : v >= 10 ? "warm" : "";
+    return `<span class="usage-num ${cls}">${fmtPercent(v)}%</span>`;
+  }
+
+  function usageMemHTML(c, u) {
+    if (c.state !== "running") return `<span class="usage-na">—</span>`;
+    if (!u) return `<span class="usage-na">…</span>`;
+    const pct = Math.max(0, Math.min(Number(u.memPercent || 0), 100));
+    const tip = `${fmtBytes(u.memUsage || 0)} / ${fmtBytes(u.memLimit || 0)} (${fmtPercent(pct)}%)`;
+    return `<span class="usage-mem" title="${esc(tip)}">
+      <span class="usage-mem-top">
+        <span class="usage-mem-val">${fmtBytes(u.memUsage || 0)}</span>
+        <span class="usage-mem-pct">${fmtPercent(pct)}%</span>
+      </span>
+      <span class="usage-mem-bar"><i class="${pct >= 80 ? "high" : ""}" style="width:${pct.toFixed(1)}%"></i></span>
+    </span>`;
   }
 
   function filteredContainers() {
@@ -421,18 +496,25 @@
     $("#container-empty").classList.toggle("hidden", list.length > 0);
     body.innerHTML = list
       .map((c) => {
-        const ports = (c.ports || [])
+        // 端口列宽度固定，映射多时只列前两个再折成 +N，完整串在 title 里
+        const portList = (c.ports || [])
           .filter((p) => p.publicPort)
-          .map((p) => `${p.publicPort}→${p.privatePort}`)
-          .join(", ");
+          .map((p) => `${p.publicPort}→${p.privatePort}`);
+        const ports =
+          portList.length > 3
+            ? `${portList.slice(0, 2).join(", ")} +${portList.length - 2}`
+            : portList.join(", ");
         const nets = (c.networks || []).join(", ");
+        const u = state.containerUsage[c.id];
         return `<tr data-id="${esc(c.id)}">
           <td><span class="state ${esc(c.state)}"><span class="dot"></span>${esc(c.state)}</span></td>
-          <td><div>${esc(c.name)}</div><div class="mono">${esc(shortId(c.id))}</div></td>
-          <td class="mono">${esc(c.image)}</td>
-          <td class="mono">${esc(ports || "—")}</td>
-          <td class="mono">${esc(nets || "—")}</td>
-          <td class="hint">${esc(fmtTime(c.created))}</td>
+          <td title="${esc(c.name)}"><div>${esc(c.name)}</div><div class="mono">${esc(shortId(c.id))}</div></td>
+          <td class="mono" title="${esc(c.image)}">${esc(c.image)}</td>
+          <td class="mono" title="${esc(portList.join(", ") || "—")}">${esc(ports || "—")}</td>
+          <td class="mono" title="${esc(nets || "—")}">${esc(nets || "—")}</td>
+          <td class="right usage-cpu">${usageCpuHTML(c, u)}</td>
+          <td class="right usage-mem">${usageMemHTML(c, u)}</td>
+          <td class="hint" title="${esc(fmtTime(c.created))}">${esc(fmtTimeShort(c.created))}</td>
           <td class="right"><div class="row-actions">${containerActions(c)}</div></td>
         </tr>`;
       })

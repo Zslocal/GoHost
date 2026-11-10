@@ -52,6 +52,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/system/stream", s.handleSystemStream)
 
 	s.mux.HandleFunc("GET /api/containers", s.handleListContainers)
+	s.mux.HandleFunc("GET /api/containers/usage", s.handleContainerUsage)
 	s.mux.HandleFunc("POST /api/containers", s.handleCreateContainer)
 	s.mux.HandleFunc("GET /api/containers/{id}", s.handleInspectContainer)
 	s.mux.HandleFunc("DELETE /api/containers/{id}", s.handleRemoveContainer)

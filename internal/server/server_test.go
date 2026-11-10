@@ -255,3 +255,48 @@ func TestStaticAssets(t *testing.T) {
 		}
 	}
 }
+
+// 批量占用接口只应返回运行中的容器，且每条都要是能直接展示的完整数据。
+func TestContainerUsageEndpoint(t *testing.T) {
+	ts, eng := newTestServer(t)
+
+	var resp struct {
+		Usage     map[string]model.ContainerStats `json:"usage"`
+		Collected int                             `json:"collected"`
+		Requested int                             `json:"requested"`
+	}
+	if code := doJSON(t, "GET", ts.URL+"/api/containers/usage", "", &resp); code != 200 {
+		t.Fatalf("usage status = %d", code)
+	}
+	if resp.Requested == 0 {
+		t.Fatal("demo engine should have running containers")
+	}
+	if resp.Collected != resp.Requested {
+		t.Errorf("collected %d != requested %d", resp.Collected, resp.Requested)
+	}
+	if len(resp.Usage) != resp.Collected {
+		t.Errorf("usage map has %d entries, collected = %d", len(resp.Usage), resp.Collected)
+	}
+
+	running := map[string]bool{}
+	list, err := eng.ListContainers(t.Context(), false)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, c := range list {
+		if c.State == "running" {
+			running[c.ID] = true
+		}
+	}
+	for id, u := range resp.Usage {
+		if !running[id] {
+			t.Errorf("usage contains non-running container %s", id)
+		}
+		if u.MemLimit == 0 || u.MemUsage == 0 {
+			t.Errorf("container %s has empty memory stats: %+v", id, u)
+		}
+		if u.MemPercent <= 0 || u.MemPercent > 100 {
+			t.Errorf("container %s memPercent = %v", id, u.MemPercent)
+		}
+	}
+}

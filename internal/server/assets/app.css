@@ -152,6 +152,47 @@ canvas { width: 100%; display: block; }
 .table .empty-cell { color: var(--muted-2); }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
+/* ---------- 容器表：CPU / 内存列 ----------
+   9 列改用固定布局，列宽只跟面板宽度有关，不随镜像名和端口串长短跳动。
+   内容超长统一省略，完整值放在 title 里。 */
+#container-table { table-layout: fixed; min-width: 1180px; }
+#container-table th:nth-child(1) { width: 7%; }  /* 状态：需容纳圆点 + running */
+#container-table th:nth-child(2) { width: 12%; } /* 名称 */
+#container-table th:nth-child(3) { width: 13%; } /* 镜像 */
+#container-table th:nth-child(4) { width: 12%; } /* 端口 */
+#container-table th:nth-child(5) { width: 8%; }  /* 网络：需容纳 docker_default */
+#container-table th:nth-child(6) { width: 6%; }  /* CPU */
+#container-table th:nth-child(7) { width: 12%; } /* 内存 */
+#container-table th:nth-child(8) { width: 11%; } /* 创建：精确到分钟的日期需约 115px */
+#container-table th:nth-child(9) { width: 19%; } /* 操作：四个按钮需 210px，19% 才稳定排一行 */
+#container-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#container-table td > div { overflow: hidden; text-overflow: ellipsis; }
+
+/* CPU：与进程榜同口径（100% = 1 个逻辑核，可超 100%），按占用着色 */
+.usage-num {
+  font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.usage-num.warm { color: var(--yellow); }
+.usage-num.hot { color: var(--red); font-weight: 600; }
+.usage-na { font-family: var(--mono); font-size: 12px; color: var(--muted-2); }
+
+/* 内存：上行「用量 + 占比」，下行细条，条长即占比 */
+.usage-mem { display: block; max-width: 100%; }
+.usage-mem-top { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; }
+.usage-mem-val {
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.usage-mem-pct { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.usage-mem-bar {
+  display: block; height: 3px; margin-top: 5px;
+  border-radius: 2px; background: #1b2536; overflow: hidden;
+}
+.usage-mem-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+/* 占用过 8 成改成警示色，一眼能看出快满了 */
+.usage-mem-bar i.high { background: var(--red); }
+
 /* ---------- 进程榜 ----------
    版式参照 go_local_host 的进程模块：table-layout:fixed + 百分比列宽，
    列宽只跟面板宽度有关，不随进程名 / 命令 / 用户名长短变化，两块榜单严格对齐。

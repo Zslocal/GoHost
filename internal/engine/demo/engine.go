@@ -531,9 +531,15 @@ func (e *Engine) ContainerStats(ctx context.Context, id string) (model.Container
 	}
 	s := c.stats
 	if c.detail.State == "running" {
+		// 每个容器给一个稳定的基线，否则同一毫秒内批量取数会让所有容器指标一模一样。
+		seed := uint32(0)
+		for _, ch := range c.detail.ID {
+			seed = seed*131 + uint32(ch)
+		}
+		base := float64(seed%1000) / 1000
 		jitter := float64(time.Now().UnixNano()%1000) / 1000
-		s.CPUPercent = 1.2 + jitter*6
-		s.MemUsage = uint64(float64(c.stats.MemLimit) * (0.18 + jitter*0.1))
+		s.CPUPercent = 0.8 + base*4 + jitter*2.5
+		s.MemUsage = uint64(float64(c.stats.MemLimit) * (0.12 + base*0.35 + jitter*0.05))
 		if s.MemLimit > 0 {
 			s.MemPercent = float64(s.MemUsage) / float64(s.MemLimit) * 100
 		}

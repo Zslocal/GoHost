@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -97,6 +99,64 @@ func (s *Server) handleListContainers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+// handleContainerUsage 批量返回运行中容器的 CPU / 内存占用。
+//
+// 单独成一个接口而不并进 /api/containers，是因为 stats 需要等 daemon 采一帧，
+// 每个容器几十到上百毫秒，串在列表里会让整个容器页白屏等它。分开后前端可以先
+// 渲染列表，再就地把这一列填上。
+//
+// 只取运行中的容器（已停止的没有意义），并发上限 6，整体 4 秒超时：
+// 超时或出错的容器直接不出现在结果里，前端显示「—」，不影响列表本身。
+func (s *Server) handleContainerUsage(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 4*time.Second)
+	defer cancel()
+
+	list, err := s.engine.ListContainers(ctx, false)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	ids := make([]string, 0, len(list))
+	for _, c := range list {
+		if c.State == "running" {
+			ids = append(ids, c.ID)
+		}
+	}
+
+	type result struct {
+		id    string
+		stats model.ContainerStats
+		err   error
+	}
+	sem := make(chan struct{}, 6)
+	out := make(chan result, len(ids))
+	var wg sync.WaitGroup
+	for _, id := range ids {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			stats, err := s.engine.ContainerStats(ctx, id)
+			out <- result{id: id, stats: stats, err: err}
+		}(id)
+	}
+	wg.Wait()
+	close(out)
+
+	usage := make(map[string]model.ContainerStats, len(ids))
+	for res := range out {
+		if res.err == nil {
+			usage[res.id] = res.stats
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"usage":     usage,
+		"collected": len(usage),
+		"requested": len(ids),
+	})
 }
 
 func (s *Server) handleInspectContainer(w http.ResponseWriter, r *http.Request) {
