@@ -242,7 +242,55 @@
 
     pushHistory(host);
     drawChart();
+    renderProc(host);
     renderContainerSummary();
+  }
+
+  // 进程榜：CPU 口径与 top 一致（100% = 1 个逻辑核，可超过 100%）。
+  // 版式沿用 go_local_host 的进程模块：两块等宽榜单、8 列固定占比、内存占比用胶囊显示。
+  function renderProc(host) {
+    const p = (host && host.proc) || {};
+    const topCPU = p.topCpu || [];
+    const topMem = p.topMem || [];
+    const metaOf = (sel, list) => {
+      const el = $(sel);
+      if (el) el.textContent = `前 ${list.length} / 扫描 ${p.scanned || 0} 个 · 共 ${p.total || 0} 个`;
+    };
+    metaOf("#proccpu-meta", topCPU);
+    metaOf("#procmem-meta", topMem);
+
+    // 内核线程没有 cmdline，按 ps 的惯例显示为 [comm]。
+    const cmdOf = (x) => String(x.cmdline || "").trim() || `[${x.name || "?"}]`;
+    const rowsOf = (list) =>
+      list
+        .map((x) => {
+          const cmd = cmdOf(x);
+          const cpu = Number(x.cpuPercent || 0);
+          const cls = cpu >= 50 ? "hot" : cpu >= 10 ? "warm" : "";
+          return `<tr>
+            <td class="mono">${x.pid}</td>
+            <td class="p-name"><span title="${esc(x.name)}">${esc(x.name || "—")}</span></td>
+            <td class="right mono ${cls}">${fmtPercent(cpu)}%</td>
+            <td class="right">${pill(x.memPercent || 0)}</td>
+            <td class="right mono">${fmtBytes(x.rssBytes || 0)}</td>
+            <td class="right mono">${x.threads || 0}</td>
+            <td class="mono">${esc(x.user || "—")}</td>
+            <td class="cmd-cell"><span class="cmd" title="${esc(cmd)}">${esc(cmd)}</span></td>
+          </tr>`;
+        })
+        .join("") || `<tr><td colspan="8" class="empty-cell">暂无进程数据</td></tr>`;
+
+    const cpuBody = $("#proccpu-table tbody");
+    const memBody = $("#procmem-table tbody");
+    if (cpuBody) cpuBody.innerHTML = rowsOf(topCPU);
+    if (memBody) memBody.innerHTML = rowsOf(topMem);
+  }
+
+  // 内存占比胶囊：数值 + 底部一条随占比变化的进度线
+  function pill(pct) {
+    const v = Math.max(0, Math.min(100, Number(pct) || 0));
+    const cls = v >= 80 ? "danger" : v >= 50 ? "warn" : "";
+    return `<span class="pill ${cls}" style="--p:${v}%">${fmtPercent(v)}%</span>`;
   }
 
   function pushHistory(host) {

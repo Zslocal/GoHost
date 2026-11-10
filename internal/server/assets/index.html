@@ -114,6 +114,35 @@
         </article>
       </div>
 
+      <div class="proc-grid">
+        <article class="panel">
+          <header class="panel-head">
+            <h2>进程 · CPU 榜</h2>
+            <span class="hint" id="proccpu-meta">—</span>
+          </header>
+          <div class="table-wrap"><table class="table proc-table" id="proccpu-table">
+            <thead><tr>
+              <th>PID</th><th>进程</th><th class="right">CPU%</th><th class="right">内存%</th>
+              <th class="right">常驻内存</th><th class="right">线程</th><th>用户</th><th>启动命令</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </article>
+        <article class="panel">
+          <header class="panel-head">
+            <h2>进程 · 内存榜</h2>
+            <span class="hint" id="procmem-meta">—</span>
+          </header>
+          <div class="table-wrap"><table class="table proc-table" id="procmem-table">
+            <thead><tr>
+              <th>PID</th><th>进程</th><th class="right">CPU%</th><th class="right">内存%</th>
+              <th class="right">常驻内存</th><th class="right">线程</th><th>用户</th><th>启动命令</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </article>
+      </div>
+
       <article class="panel">
         <header class="panel-head">
           <h2>容器概况</h2>

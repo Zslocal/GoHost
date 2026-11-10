@@ -220,6 +220,31 @@ type HostStats struct {
 	NetRxRate    float64     `json:"netRxRate"`
 	NetTxRate    float64     `json:"netTxRate"`
 	Processes    uint64      `json:"processes"`
+	Proc         ProcStats   `json:"proc"`
+}
+
+// ProcStats 是宿主机进程榜的快照，口径与 top 一致：
+// CPU 100% = 1 个逻辑核（可超过 100%），内存百分比 = RSS / MemTotal。
+type ProcStats struct {
+	Total   int        `json:"total"`   // 进程总数
+	Running int        `json:"running"` // 处于 R 态的进程数
+	Scanned int        `json:"scanned"` // 本轮成功采样的进程数
+	TopCPU  []ProcInfo `json:"topCpu"`  // 按 CPU 降序的前 N 个
+	TopMem  []ProcInfo `json:"topMem"`  // 按常驻内存降序的前 N 个
+}
+
+// ProcInfo 是单个进程的采样结果。CPU 为相邻两次采样间的差分，
+// 首次采样（无上一帧）为 0；RSS 不含被换出的部分。
+type ProcInfo struct {
+	PID     int     `json:"pid"`
+	Name    string  `json:"name"`
+	User    string  `json:"user"`
+	State   string  `json:"state"`
+	CPU     float64 `json:"cpuPercent"`
+	Mem     float64 `json:"memPercent"`
+	RSS     uint64  `json:"rssBytes"`
+	Threads int     `json:"threads"`
+	Cmdline string  `json:"cmdline,omitempty"`
 }
 
 type DiskStats struct {

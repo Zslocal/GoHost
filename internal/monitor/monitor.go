@@ -18,11 +18,14 @@ import (
 )
 
 type Monitor struct {
-	mu       sync.Mutex
-	lastNet  map[string]gnet.IOCountersStat
-	lastTime time.Time
-	cpuModel string
-	cpuCores int
+	mu         sync.Mutex
+	lastNet    map[string]gnet.IOCountersStat
+	lastTime   time.Time
+	cpuModel   string
+	cpuCores   int
+	procMu     sync.Mutex
+	procPrev   map[int]procSample
+	procPrevAt time.Time
 }
 
 func New() *Monitor {
@@ -83,6 +86,7 @@ func (m *Monitor) Snapshot(ctx context.Context) (model.HostStats, error) {
 
 	stats.Disks = m.disks(ctx)
 	stats.Networks, stats.NetRxRate, stats.NetTxRate = m.networks(now)
+	stats.Proc = m.collectProcs(defaultProcTopN, stats.MemTotal)
 	return stats, nil
 }
 

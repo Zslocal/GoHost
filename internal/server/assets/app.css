@@ -152,6 +152,54 @@ canvas { width: 100%; display: block; }
 .table .empty-cell { color: var(--muted-2); }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
+/* ---------- 进程榜 ----------
+   版式参照 go_local_host 的进程模块：table-layout:fixed + 百分比列宽，
+   列宽只跟面板宽度有关，不随进程名 / 命令 / 用户名长短变化，两块榜单严格对齐。
+   面板窄于 620px 时表格横向滚动（沿用 .table-wrap 的 overflow-x）。 */
+.proc-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 18px; }
+@media (min-width: 1400px) {
+  .proc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.proc-table { table-layout: fixed; width: 100%; min-width: 620px; }
+.proc-table th:nth-child(1) { width: 8%; }  /* PID */
+.proc-table th:nth-child(2) { width: 17%; } /* 进程 */
+.proc-table th:nth-child(3) { width: 9%; }  /* CPU% */
+.proc-table th:nth-child(4) { width: 9%; }  /* 内存% */
+.proc-table th:nth-child(5) { width: 12%; } /* 常驻内存 */
+.proc-table th:nth-child(6) { width: 6%; }  /* 线程 */
+.proc-table th:nth-child(7) { width: 11%; } /* 用户 */
+.proc-table th:nth-child(8) { width: 28%; } /* 启动命令 */
+/* 数字列用略小的等宽字，五位数 PID 与三位数百分比才不会被列宽挤掉 */
+.proc-table td.mono { font-size: 11.5px; }
+/* 8 列较挤：收紧左右内边距，把省下来的宽度让给启动命令；超长内容一律省略 */
+.proc-table th, .proc-table td {
+  padding-left: 6px; padding-right: 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.proc-table th.right { text-align: right; }
+.proc-table th:nth-child(2), .proc-table td:nth-child(2),
+.proc-table th:nth-child(7), .proc-table td:nth-child(7) { text-align: left; }
+.proc-table .p-name { font-weight: 550; }
+.proc-table td.hot { color: var(--red); font-weight: 600; }
+.proc-table td.warm { color: var(--yellow); }
+.proc-table .cmd-cell { text-align: left; }
+.proc-table .cmd {
+  display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 11.5px; color: var(--muted-2);
+}
+/* 内存占比胶囊：数值 + 底部随占比变化的细线 */
+.pill {
+  position: relative; display: inline-block; min-width: 44px; text-align: right;
+  padding: 3px 6px; border-radius: 6px; background: #1b2536; color: var(--muted);
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden;
+}
+.pill::before {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 2px;
+  width: var(--p, 0%); background: currentColor; opacity: 0.55;
+}
+.pill.warn { background: rgba(242, 193, 78, 0.13); color: var(--yellow); }
+.pill.danger { background: rgba(242, 95, 107, 0.13); color: var(--red); }
+
 .state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
 .state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted-2); }
 .state.running .dot { background: var(--green); box-shadow: 0 0 6px #38d68a77; }
