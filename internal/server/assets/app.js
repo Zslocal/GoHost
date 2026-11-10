@@ -298,6 +298,20 @@
     const memBody = $("#procmem-table tbody");
     if (cpuBody) cpuBody.innerHTML = rowsOf(topCPU);
     if (memBody) memBody.innerHTML = rowsOf(topMem);
+    syncListHeight();
+  }
+
+  // 磁盘挂载 / 网络接口与进程榜等高：把进程榜表格的实际高度写进 --list-h。
+  // 进程榜固定 8 行，高度稳定；窗口宽度变化可能改到行高，所以 resize 时也同步一次。
+  let procListHeight = 0;
+  function syncListHeight() {
+    const t = $("#proccpu-table");
+    if (!t) return;
+    const h = Math.round(t.getBoundingClientRect().height);
+    if (h > 0 && h !== procListHeight) {
+      procListHeight = h;
+      document.documentElement.style.setProperty("--list-h", `${h}px`);
+    }
   }
 
   // 内存占比胶囊：数值 + 底部一条随占比变化的进度线
@@ -1368,6 +1382,7 @@ volumes:
 
     window.addEventListener("resize", () => {
       drawChart();
+      syncListHeight();
       if (state.termFit) {
         try { state.termFit.fit(); } catch (_) {}
       }

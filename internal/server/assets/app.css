@@ -152,6 +152,39 @@ canvas { width: 100%; display: block; }
 .table .empty-cell { color: var(--muted-2); }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
+/* ---------- 磁盘 / 网络：固定高度 + 纵向滚动 ----------
+   高度由 --list-h 驱动，JS 在渲染进程榜后把它的表格实际高度写进来，
+   于是这三块面板等高；挂载点或网卡多到装不下时，右侧出现纵向滚动条，
+   表头 sticky 常驻，滚动过程中列名不会跟着跑掉。 */
+.scroll-body {
+  /* 408px 是进程榜 8 行表格在默认字号下的实际高度，写在这里当兜底，
+     JS 首次渲染后会用实测值覆盖，避免加载瞬间的高度跳变 */
+  height: var(--list-h, 408px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.scroll-body thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--panel);
+  /* table 是 border-collapse，sticky 表头的 border-bottom 会跟着滚，用内阴影代替 */
+  border-bottom: 0;
+  box-shadow: inset 0 -1px 0 var(--line-soft);
+}
+/* 细滚动条，跟暗色面板同色系。这里只写 ::-webkit-scrollbar：
+   一旦同时声明 scrollbar-width / scrollbar-color，Chrome 会改用它自带的
+   细滚动条并忽略下面这套规则，Linux 上还可能退化成不占位的浮层条。 */
+.scroll-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-body::-webkit-scrollbar-track { background: transparent; }
+.scroll-body::-webkit-scrollbar-thumb {
+  background: #2f425f; border-radius: 99px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.scroll-body::-webkit-scrollbar-thumb:hover { background: #405877; background-clip: padding-box; }
+/* Firefox 没有 ::-webkit-scrollbar，用标准属性兜底 */
+@supports not selector(::-webkit-scrollbar) {
+  .scroll-body { scrollbar-width: thin; scrollbar-color: #2f425f transparent; }
+}
+
 /* ---------- 容器表：CPU / 内存列 ----------
    9 列改用固定布局，列宽只跟面板宽度有关，不随镜像名和端口串长短跳动。
    内容超长统一省略，完整值放在 title 里。 */
