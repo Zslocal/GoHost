@@ -125,10 +125,22 @@ docker run -d --name dockerview -p 8080:8080 \
 一次产出三个平台（`.exe` 后缀只给 Windows）：
 
 ```bash
+make dist        # 产出到 dist/，并生成 SHA256SUMS
+make dist-clean  # 只删产物，保留 dist/data
+```
+
+没有 `make` 的话（Windows 自带环境通常没有），等价命令如下：
+
+```bash
+mkdir -p dist
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/dockerview-windows-amd64.exe .
 CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/dockerview-linux-amd64 .
 CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "-s -w" -o dist/dockerview-linux-arm64 .
+
+cd dist && sha256sum dockerview-windows-amd64.exe dockerview-linux-amd64 dockerview-linux-arm64 > SHA256SUMS
 ```
+
+> PowerShell 里不能用 `CGO_ENABLED=0 GOOS=...` 这种前缀写法，要先 `$env:GOOS="linux"`、`$env:GOARCH="arm64"` 再执行 `go build`。
 
 验证产物架构与链接方式：
 
