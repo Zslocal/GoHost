@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -225,6 +226,114 @@ func TestComposeEndpoints(t *testing.T) {
 
 	if code := doJSON(t, "POST", ts.URL+"/api/compose/up", `{"content":"services: ["}`, nil); code != 400 {
 		t.Errorf("invalid compose status = %d, want 400", code)
+	}
+}
+
+func TestTopContainersEndpoint(t *testing.T) {
+	ts, _ := newTestServer(t)
+
+	var body struct {
+		CPU    []model.ContainerMetric `json:"cpu"`
+		Memory []model.ContainerMetric `json:"memory"`
+	}
+	if code := doJSON(t, "GET", ts.URL+"/api/containers/top", "", &body); code != 200 {
+		t.Fatalf("top status = %d", code)
+	}
+	if len(body.CPU) == 0 {
+		t.Fatal("expected running containers in cpu ranking")
+	}
+	if len(body.CPU) > defaultTopLimit {
+		t.Errorf("cpu ranking length = %d, want <= %d", len(body.CPU), defaultTopLimit)
+	}
+	if len(body.CPU) != len(body.Memory) {
+		t.Errorf("cpu/memory ranking length mismatch: %d vs %d", len(body.CPU), len(body.Memory))
+	}
+	for i := 1; i < len(body.CPU); i++ {
+		if body.CPU[i-1].CPUPercent < body.CPU[i].CPUPercent {
+			t.Errorf("cpu ranking not descending at %d: %v < %v", i, body.CPU[i-1].CPUPercent, body.CPU[i].CPUPercent)
+		}
+	}
+	for i := 1; i < len(body.Memory); i++ {
+		if body.Memory[i-1].MemUsage < body.Memory[i].MemUsage {
+			t.Errorf("memory ranking not descending at %d", i)
+		}
+	}
+	for _, m := range body.Memory {
+		if m.Pid <= 0 {
+			t.Errorf("memory ranking entry %q missing pid", m.Name)
+		}
+		if m.Command == "" {
+			t.Errorf("memory ranking entry %q missing command", m.Name)
+		}
+	}
+	for _, m := range body.CPU {
+		if m.State != "running" {
+			t.Errorf("top ranking should only include running containers, got %q", m.State)
+		}
+		if m.Name == "" {
+			t.Error("ranking entry missing container name")
+		}
+		if m.Pid <= 0 {
+			t.Errorf("ranking entry %q missing pid", m.Name)
+		}
+		if m.Command == "" {
+			t.Errorf("ranking entry %q missing command", m.Name)
+		}
+	}
+
+	var limited struct {
+		CPU    []model.ContainerMetric `json:"cpu"`
+		Memory []model.ContainerMetric `json:"memory"`
+	}
+	if code := doJSON(t, "GET", ts.URL+"/api/containers/top?limit=2", "", &limited); code != 200 {
+		t.Fatalf("top limit status = %d", code)
+	}
+	if len(limited.CPU) > 2 {
+		t.Errorf("limit=2 cpu length = %d", len(limited.CPU))
+	}
+}
+
+func TestTopContainersClampsAndEmpty(t *testing.T) {
+	ts, _ := newTestServer(t)
+
+	raw, err := http.Get(ts.URL + "/api/containers/top?limit=999")
+	if err != nil {
+		t.Fatalf("top max limit: %v", err)
+	}
+	defer raw.Body.Close()
+	var body struct {
+		CPU    []model.ContainerMetric `json:"cpu"`
+		Memory []model.ContainerMetric `json:"memory"`
+	}
+	if err := json.NewDecoder(raw.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.CPU) > maxTopLimit {
+		t.Errorf("limit should clamp to %d, got %d", maxTopLimit, len(body.CPU))
+	}
+
+	emptyTS, _ := newTestServer(t)
+	var containers []model.Container
+	doJSON(t, "GET", emptyTS.URL+"/api/containers", "", &containers)
+	for _, c := range containers {
+		if c.State == "running" {
+			if code := doJSON(t, "POST", emptyTS.URL+"/api/containers/"+c.ID+"/stop", "", nil); code != 200 {
+				t.Fatalf("stop %s status = %d", c.Name, code)
+			}
+		}
+	}
+
+	raw2, err := http.Get(emptyTS.URL + "/api/containers/top")
+	if err != nil {
+		t.Fatalf("top empty: %v", err)
+	}
+	defer raw2.Body.Close()
+	payload, _ := io.ReadAll(raw2.Body)
+	if !strings.Contains(string(payload), `"cpu":[]`) {
+		t.Errorf("expected cpu to serialize as [], got %s", string(payload))
+	}
+	if !strings.Contains(string(payload), `"memory":[]`) {
+		t.Errorf("expected memory to serialize as [], got %s", string(payload))
 	}
 }
 

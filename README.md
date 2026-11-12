@@ -4,7 +4,7 @@
 
 ## 特性
 
-- **仪表盘**：CPU / 内存 / 磁盘 / 网络吞吐实时监控，SSE 推送资源曲线
+- **仪表盘**：CPU / 内存 / 磁盘 / 网络吞吐实时监控，SSE 推送资源曲线；CPU 与内存占用 TOP 10 容器排行
 - **进程榜**：CPU 与常驻内存双榜，含 PID、属主、线程数、启动命令（Linux 直读 `/proc`）
 - **容器管理**：启停、重启、暂停、Kill、删除、创建；列表直接显示 CPU 与内存占用
 - **容器详情**：CPU/内存/网络/进程统计，挂载点、环境变量、配置项
@@ -274,6 +274,7 @@ DOCKERVIEW_INTEGRATION=1 go test ./internal/engine/docker/ -v
 | GET | `/api/system/stream` | 系统指标 SSE 流 |
 | GET | `/api/containers?all=` | 容器列表 |
 | GET | `/api/containers/usage` | 运行中容器的 CPU / 内存占用（批量，供列表展示） |
+| GET | `/api/containers/top?limit=` | CPU / 内存占用 TOP N 排行（默认 10，上限 50） |
 | POST | `/api/containers` | 创建容器 |
 | GET | `/api/containers/{id}` | 容器详情 |
 | DELETE | `/api/containers/{id}?force=&volumes=` | 删除容器 |

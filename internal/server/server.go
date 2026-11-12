@@ -19,6 +19,7 @@ type Server struct {
 	monitor   *monitor.Monitor
 	mux       *http.ServeMux
 	composeMu sync.Mutex
+	topCache  topCache
 	done      chan struct{}
 	closeOnce sync.Once
 }
@@ -51,6 +52,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/system", s.handleSystem)
 	s.mux.HandleFunc("GET /api/system/stream", s.handleSystemStream)
 
+	s.mux.HandleFunc("GET /api/containers/top", s.handleTopContainers)
 	s.mux.HandleFunc("GET /api/containers", s.handleListContainers)
 	s.mux.HandleFunc("GET /api/containers/usage", s.handleContainerUsage)
 	s.mux.HandleFunc("POST /api/containers", s.handleCreateContainer)

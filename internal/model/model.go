@@ -47,6 +47,7 @@ type ContainerDetail struct {
 	Hostname      string          `json:"hostname,omitempty"`
 	RestartPolicy string          `json:"restartPolicy,omitempty"`
 	Tty           bool            `json:"tty"`
+	Pid           int             `json:"pid"`
 	IPAddress     string          `json:"ipAddress,omitempty"`
 	CreatedAt     string          `json:"createdAt,omitempty"`
 	StartedAt     string          `json:"startedAt,omitempty"`
@@ -67,6 +68,19 @@ type ContainerStats struct {
 	BlockWrite uint64    `json:"blockWrite"`
 	Pids       uint64    `json:"pids"`
 	Timestamp  time.Time `json:"timestamp"`
+}
+
+type ContainerMetric struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	Image      string  `json:"image"`
+	State      string  `json:"state"`
+	Pid        int     `json:"pid"`
+	Command    string  `json:"command"`
+	CPUPercent float64 `json:"cpuPercent"`
+	MemUsage   uint64  `json:"memUsage"`
+	MemLimit   uint64  `json:"memLimit"`
+	MemPercent float64 `json:"memPercent"`
 }
 
 type CreateContainerRequest struct {
