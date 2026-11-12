@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,11 +65,11 @@ func (e *Engine) seed() {
 	}
 
 	nets := []model.Network{
-		{ID: randID(), Name: "bridge", Driver: "bridge", Scope: "local", Created: now.Add(-720 * time.Hour).Format(time.RFC3339)},
+		{ID: randID(), Name: "bridge", Driver: "bridge", Scope: "local", Subnet: "172.17.0.0/16", Gateway: "172.17.0.1", Created: now.Add(-720 * time.Hour).Format(time.RFC3339)},
 		{ID: randID(), Name: "host", Driver: "host", Scope: "local", Created: now.Add(-720 * time.Hour).Format(time.RFC3339)},
 		{ID: randID(), Name: "none", Driver: "null", Scope: "local", Created: now.Add(-720 * time.Hour).Format(time.RFC3339)},
-		{ID: randID(), Name: "shop_default", Driver: "bridge", Scope: "local", Created: now.Add(-30 * time.Hour).Format(time.RFC3339)},
-		{ID: randID(), Name: "monitoring", Driver: "bridge", Scope: "local", Created: now.Add(-20 * time.Hour).Format(time.RFC3339)},
+		{ID: randID(), Name: "shop_default", Driver: "bridge", Scope: "local", Subnet: "172.18.0.0/16", Gateway: "172.18.0.1", Created: now.Add(-30 * time.Hour).Format(time.RFC3339)},
+		{ID: randID(), Name: "monitoring", Driver: "bridge", Scope: "local", Subnet: "172.19.0.0/16", Gateway: "172.19.0.1", IPRange: "172.19.0.0/24", Attachable: true, Created: now.Add(-20 * time.Hour).Format(time.RFC3339)},
 	}
 	for _, n := range nets {
 		e.networks[n.ID] = &n
@@ -207,6 +208,46 @@ func (e *Engine) seed() {
 		e.containers[id] = cs
 		e.order = append(e.order, id)
 	}
+
+	// 按容器的 Networks 字段反填网络的接入点，模拟 docker network inspect 的 Containers 段：
+	// 网关按 IPAM 给，地址从 .2 起顺序分配，与真实 Docker 的分配习惯一致。
+	e.rebuildEndpoints()
+}
+
+// rebuildEndpoints 依据容器当前的网络归属重建各网络的接入点列表，调用方需已持有锁。
+func (e *Engine) rebuildEndpoints() {
+	for _, n := range e.networks {
+		n.Containers = n.Containers[:0]
+		if n.Driver == "host" || n.Driver == "null" {
+			continue
+		}
+		prefix := ""
+		if n.Gateway != "" {
+			if i := strings.LastIndexByte(n.Gateway, '.'); i > 0 {
+				prefix = n.Gateway[:i]
+			}
+		}
+		idx := 2
+		for _, id := range e.order {
+			cs := e.containers[id]
+			for _, netName := range cs.detail.Networks {
+				if netName != n.Name {
+					continue
+				}
+				ip := ""
+				if prefix != "" {
+					ip = fmt.Sprintf("%s.%d", prefix, idx)
+					idx++
+				}
+				n.Containers = append(n.Containers, model.NetworkEndpoint{
+					Name: cs.detail.Name,
+					ID:   shortName(id),
+					IPv4: ip,
+					MAC:  macForIP(ip),
+				})
+			}
+		}
+	}
 }
 
 func shortName(name string) string {
@@ -214,6 +255,24 @@ func shortName(name string) string {
 		return name[:12]
 	}
 	return name
+}
+
+// macForIP 按 Docker 的规则把 IPv4 编成 02:42:xx:xx:xx:xx，仅 demo 用。
+func macForIP(ip string) string {
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return ""
+	}
+	octets := make([]string, 0, 6)
+	octets = append(octets, "02", "42")
+	for _, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return ""
+		}
+		octets = append(octets, fmt.Sprintf("%02x", n))
+	}
+	return strings.Join(octets, ":")
 }
 
 func humanizeDuration(d time.Duration) string {
@@ -633,6 +692,7 @@ func (e *Engine) RemoveImage(ctx context.Context, id string, force bool) error {
 func (e *Engine) ListNetworks(ctx context.Context) ([]model.Network, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.rebuildEndpoints()
 	out := make([]model.Network, 0, len(e.networks))
 	for _, n := range e.networks {
 		out = append(out, *n)
@@ -657,12 +717,21 @@ func (e *Engine) CreateNetwork(ctx context.Context, req model.CreateNetworkReque
 	if driver == "" {
 		driver = "bridge"
 	}
+	// Docker 会给 bridge 网络自动分配一段空闲子网，demo 里按现有网络数量顺序编一段
+	subnet, gateway := "", ""
+	if driver == "bridge" {
+		third := 20 + len(e.networks)
+		subnet = fmt.Sprintf("172.%d.0.0/16", third)
+		gateway = fmt.Sprintf("172.%d.0.1", third)
+	}
 	e.networks[id] = &model.Network{
 		ID:       id,
 		Name:     req.Name,
 		Driver:   driver,
 		Scope:    "local",
 		Internal: req.Internal,
+		Subnet:   subnet,
+		Gateway:  gateway,
 		Created:  time.Now().Format(time.RFC3339),
 	}
 	return id, nil
@@ -748,7 +817,13 @@ func (e *Engine) ComposeUp(ctx context.Context, file model.ComposeFile) error {
 		}
 		if !found {
 			id := randID()
-			e.networks[id] = &model.Network{ID: id, Name: name, Driver: "bridge", Scope: "local", Created: time.Now().Format(time.RFC3339)}
+			third := 20 + len(e.networks)
+			e.networks[id] = &model.Network{
+				ID: id, Name: name, Driver: "bridge", Scope: "local",
+				Subnet:  fmt.Sprintf("172.%d.0.0/16", third),
+				Gateway: fmt.Sprintf("172.%d.0.1", third),
+				Created: time.Now().Format(time.RFC3339),
+			}
 		}
 	}
 	for _, v := range file.Volumes {

@@ -154,6 +154,38 @@ canvas { width: 100%; display: block; }
 .table .empty-cell { color: var(--muted-2); }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
+/* ---------- 网络表：名称 + 子网/网关 + 接入点 ----------
+   列宽固定，容器名再长也不会把子网列挤到换行；接入点用 chip 平铺，多容器时横向铺满再折行。 */
+#network-table { table-layout: fixed; min-width: 920px; }
+#network-table th:nth-child(1) { width: 16%; } /* 名称 */
+#network-table th:nth-child(2) { width: 18%; } /* 子网 / 网关 */
+#network-table th:nth-child(3) { width: 8%; }  /* 驱动 */
+#network-table th:nth-child(4) { width: 8%; }  /* 作用域 */
+#network-table th:nth-child(5) { width: 43%; } /* 关联容器 */
+#network-table th:nth-child(6) { width: 7%; }  /* 操作 */
+#network-table td { vertical-align: top; }
+#network-table td:nth-child(1) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.net-cidr { color: var(--text); }
+/* .table .mono 会把颜色压到 muted，网段要让它在行里当主信息，这里提回正文色 */
+#network-table .net-cidr { color: var(--text); font-size: 12px; }
+.net-gw { font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: nowrap; }
+
+.ep-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ep {
+  display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%;
+  padding: 3px 8px; border-radius: 7px;
+  background: #101827; border: 1px solid var(--line-soft);
+}
+.ep:hover { border-color: var(--line); }
+.ep-name {
+  font-size: 12.5px; color: var(--text);
+  max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ep-meta {
+  font-family: var(--mono); font-size: 11.5px; color: var(--muted); white-space: nowrap;
+}
+
 /* ---------- 磁盘 / 网络：固定高度 + 纵向滚动 ----------
    高度由 --list-h 驱动，JS 在渲染进程榜后把它的表格实际高度写进来，
    于是这三块面板等高；挂载点或网卡多到装不下时，右侧出现纵向滚动条，

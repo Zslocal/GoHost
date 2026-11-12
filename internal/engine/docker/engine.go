@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
@@ -589,18 +590,47 @@ func (e *Engine) ListNetworks(ctx context.Context) ([]model.Network, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 网络数量不多（通常个位数），逐个 inspect 才能稳定拿到 IPAM.Config 与接入点地址：
+	// /networks 列表接口在某些版本上会省略 Containers，直接列表会让容器列变空。
+	resources := make([]types.NetworkResource, len(list))
+	for i, n := range list {
+		resources[i] = n
+		if inspected, err := e.cli.NetworkInspect(ctx, n.ID, types.NetworkInspectOptions{}); err == nil {
+			resources[i] = inspected
+		}
+	}
+
 	out := make([]model.Network, 0, len(list))
-	for _, n := range list {
-		resource := n
-		if len(resource.Containers) == 0 {
-			if inspected, err := e.cli.NetworkInspect(ctx, n.ID, types.NetworkInspectOptions{}); err == nil {
-				resource = inspected
+	for i, n := range list {
+		res := resources[i]
+
+		subnet, gateway, ipRange := "", "", ""
+		subnetV6, gatewayV6 := "", ""
+		for _, cfg := range res.IPAM.Config {
+			switch {
+			case strings.Contains(cfg.Subnet, ":"):
+				if subnetV6 == "" {
+					subnetV6, gatewayV6 = cfg.Subnet, cfg.Gateway
+				}
+			default:
+				if subnet == "" && cfg.Subnet != "" {
+					subnet, gateway, ipRange = cfg.Subnet, cfg.Gateway, cfg.IPRange
+				}
 			}
 		}
-		containers := make([]string, 0, len(resource.Containers))
-		for cid, ep := range resource.Containers {
-			containers = append(containers, ep.Name+" ("+shortID(cid)+")")
+
+		containers := make([]model.NetworkEndpoint, 0, len(res.Containers))
+		for cid, ep := range res.Containers {
+			containers = append(containers, model.NetworkEndpoint{
+				Name: ep.Name,
+				ID:   shortID(cid),
+				IPv4: cidrHost(ep.IPv4Address),
+				IPv6: cidrHost(ep.IPv6Address),
+				MAC:  ep.MacAddress,
+			})
 		}
+		sort.Slice(containers, func(a, b int) bool { return containers[a].Name < containers[b].Name })
+
 		out = append(out, model.Network{
 			ID:         n.ID,
 			Name:       n.Name,
@@ -608,11 +638,24 @@ func (e *Engine) ListNetworks(ctx context.Context) ([]model.Network, error) {
 			Scope:      n.Scope,
 			Internal:   n.Internal,
 			Attachable: n.Attachable,
+			Subnet:     subnet,
+			Gateway:    gateway,
+			IPRange:    ipRange,
+			SubnetV6:   subnetV6,
+			GatewayV6:  gatewayV6,
 			Containers: containers,
 			Created:    n.Created.Format(time.RFC3339),
 		})
 	}
 	return out, nil
+}
+
+// cidrHost 把 "172.18.0.2/16" 这种带前缀长度的地址裁成纯 IP。
+func cidrHost(addr string) string {
+	if i := strings.IndexByte(addr, '/'); i >= 0 {
+		return addr[:i]
+	}
+	return addr
 }
 
 func (e *Engine) CreateNetwork(ctx context.Context, req model.CreateNetworkRequest) (string, error) {

@@ -115,14 +115,29 @@ type Image struct {
 }
 
 type Network struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Driver     string   `json:"driver"`
-	Scope      string   `json:"scope"`
-	Internal   bool     `json:"internal"`
-	Attachable bool     `json:"attachable"`
-	Containers []string `json:"containers,omitempty"`
-	Created    string   `json:"created,omitempty"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Driver     string `json:"driver"`
+	Scope      string `json:"scope"`
+	Internal   bool   `json:"internal"`
+	Attachable bool   `json:"attachable"`
+	// 子网 / 网关取自 IPAM.Config，没有 IPAM 的网络（host、none）留空
+	Subnet     string            `json:"subnet,omitempty"`
+	Gateway    string            `json:"gateway,omitempty"`
+	IPRange    string            `json:"ipRange,omitempty"`
+	SubnetV6   string            `json:"subnetV6,omitempty"`
+	GatewayV6  string            `json:"gatewayV6,omitempty"`
+	Containers []NetworkEndpoint `json:"containers,omitempty"`
+	Created    string            `json:"created,omitempty"`
+}
+
+// NetworkEndpoint 是网络里的一个接入点：容器名、短 ID 和它在该网络上分到的地址。
+type NetworkEndpoint struct {
+	Name string `json:"name"`
+	ID   string `json:"id"`
+	IPv4 string `json:"ipv4,omitempty"`
+	IPv6 string `json:"ipv6,omitempty"`
+	MAC  string `json:"mac,omitempty"`
 }
 
 type CreateNetworkRequest struct {

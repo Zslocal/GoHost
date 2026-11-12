@@ -732,6 +732,35 @@
 
   /* ---------------- Networks ---------------- */
 
+  // 子网 / 网关 / 地址池：IPv4 在上，IPv6 另起一组；没有 IPAM 的网络（host、none）显示占位符
+  function renderNetIPAM(n) {
+    const rows = [];
+    if (n.subnet) rows.push(`<div class="net-cidr mono" title="网段">${esc(n.subnet)}</div>`);
+    if (n.gateway) rows.push(`<div class="net-gw" title="网关">网关 ${esc(n.gateway)}</div>`);
+    if (n.ipRange) rows.push(`<div class="net-gw" title="可分配地址段">地址池 ${esc(n.ipRange)}</div>`);
+    if (n.subnetV6) rows.push(`<div class="net-cidr mono" title="IPv6 网段">${esc(n.subnetV6)}</div>`);
+    if (n.gatewayV6) rows.push(`<div class="net-gw" title="IPv6 网关">网关 ${esc(n.gatewayV6)}</div>`);
+    return rows.join("") || `<span class="hint">—</span>`;
+  }
+
+  // 接入点：容器名 + 分到的 IP + 短 ID，一行一个 chip，容器多时自然换行
+  function renderNetEndpoints(n) {
+    const eps = n.containers || [];
+    if (!eps.length) return `<span class="hint">—</span>`;
+    const chips = eps
+      .map((ep) => {
+        const ip = ep.ipv4 || ep.ipv6 || "";
+        const meta = [ip, ep.id].filter(Boolean).join(" · ");
+        const full = [ep.name, ep.ipv4, ep.ipv6, ep.mac].filter(Boolean).join("  ");
+        return `<span class="ep" title="${esc(full)}">
+          <span class="ep-name">${esc(ep.name)}</span>
+          <span class="ep-meta">${esc(meta)}</span>
+        </span>`;
+      })
+      .join("");
+    return `<div class="ep-list">${chips}</div>`;
+  }
+
   async function loadNetworks(silent = false) {
     try {
       const list = await api("/api/networks");
@@ -739,14 +768,15 @@
       $("#network-table tbody").innerHTML = list
         .map(
           (n) => `<tr data-id="${esc(n.id)}">
-            <td>${esc(n.name)}</td>
+            <td>${esc(n.name)}${n.internal ? ` <span class="badge">internal</span>` : ""}</td>
+            <td>${renderNetIPAM(n)}</td>
             <td class="mono">${esc(n.driver)}</td>
             <td class="hint">${esc(n.scope)}</td>
-            <td class="mono">${esc((n.containers || []).join(", ") || "—")}</td>
+            <td>${renderNetEndpoints(n)}</td>
             <td class="right"><button class="btn small danger" data-remove-network="${esc(n.id)}">删除</button></td>
           </tr>`
         )
-        .join("") || `<tr><td colspan="5" class="empty-cell">暂无网络</td></tr>`;
+        .join("") || `<tr><td colspan="6" class="empty-cell">暂无网络</td></tr>`;
       $$("#network-table [data-remove-network]").forEach((btn) => {
         btn.addEventListener("click", async () => {
           if (!confirm("确认删除该网络?")) return;
