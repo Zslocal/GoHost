@@ -172,6 +172,7 @@ func (e *Engine) seed() {
 				Created:  created.Unix(),
 				State:    s.state,
 				Status:   statusText,
+				Command:  strings.Join(s.cmd, " "),
 				Ports:    s.ports,
 				Networks: s.networks,
 				Mounts:   s.mounts,
@@ -190,6 +191,7 @@ func (e *Engine) seed() {
 			WorkingDir:    "/",
 			Hostname:      shortName(s.name),
 			IPAddress:     "172.18.0." + fmt.Sprint(2+i),
+			Pid:           1000 + i,
 			Tty:           false,
 		}
 		if s.state == "exited" {
@@ -344,6 +346,7 @@ func (e *Engine) CreateContainer(ctx context.Context, req model.CreateContainerR
 			Created:  now.Unix(),
 			State:    "running",
 			Status:   "Up 1 second",
+			Command:  req.Command,
 			Ports:    ports,
 			Labels:   labels,
 			Networks: req.Networks,
@@ -356,6 +359,7 @@ func (e *Engine) CreateContainer(ctx context.Context, req model.CreateContainerR
 		WorkingDir:    req.WorkingDir,
 		Hostname:      req.Hostname,
 		IPAddress:     "172.18.0." + fmt.Sprint(len(e.containers)+2),
+		Pid:           2000 + len(e.containers),
 		Tty:           req.Tty,
 		RestartPolicy: req.RestartPolicy,
 	}
@@ -771,6 +775,7 @@ func (e *Engine) ComposeUp(ctx context.Context, file model.ComposeFile) error {
 				Created:  now.Unix(),
 				State:    "running",
 				Status:   "Up 1 second",
+				Command:  svc.Command,
 				Ports:    demoPorts(svc.Ports),
 				Networks: nets,
 				Mounts:   parseDemoMounts(svc.Volumes),
@@ -784,6 +789,7 @@ func (e *Engine) ComposeUp(ctx context.Context, file model.ComposeFile) error {
 			Env:       svc.Environment,
 			Cmd:       parseDemoArgs(svc.Command),
 			Hostname:  name,
+			Pid:       3000 + len(e.containers),
 			CreatedAt: now.Format(time.RFC3339),
 			StartedAt: now.Format(time.RFC3339),
 		}

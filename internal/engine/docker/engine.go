@@ -184,6 +184,7 @@ func (e *Engine) InspectContainer(ctx context.Context, id string) (model.Contain
 	if info.State != nil {
 		detail.State = info.State.Status
 		detail.Status = info.State.Status
+		detail.Pid = info.State.Pid
 		detail.StartedAt = info.State.StartedAt
 		detail.FinishedAt = info.State.FinishedAt
 		if info.State.Health != nil {

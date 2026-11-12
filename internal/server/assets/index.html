@@ -97,6 +97,31 @@
         </article>
       </div>
 
+      <div class="grid-2 rank-grid">
+        <article class="panel">
+          <header class="panel-head">
+            <h2>CPU 占用 TOP 10</h2>
+            <span class="hint" id="top-cpu-hint">运行中容器</span>
+          </header>
+          <div class="table-wrap"><table class="table rank-table" id="top-cpu-table">
+            <thead><tr><th class="rank-col">#</th><th>容器</th><th class="rank-pid">PID</th><th class="rank-cmd">命令</th><th class="rank-value">CPU</th><th class="rank-bar-col">占比</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="empty hidden" id="top-cpu-empty">暂无运行中的容器</div>
+        </article>
+        <article class="panel">
+          <header class="panel-head">
+            <h2>内存占用 TOP 10</h2>
+            <span class="hint" id="top-mem-hint">运行中容器</span>
+          </header>
+          <div class="table-wrap"><table class="table rank-table" id="top-mem-table">
+            <thead><tr><th class="rank-col">#</th><th>容器</th><th class="rank-pid">PID</th><th class="rank-cmd">命令</th><th class="rank-value">内存</th><th class="rank-bar-col">占比</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+          <div class="empty hidden" id="top-mem-empty">暂无运行中的容器</div>
+        </article>
+      </div>
+
       <div class="grid-2">
         <article class="panel">
           <header class="panel-head"><h2>磁盘挂载</h2></header>
@@ -277,6 +302,7 @@
 </div>
 
 <div class="toast-wrap" id="toast-wrap"></div>
+<div class="cmd-tip hidden" id="cmd-tip"></div>
 
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>

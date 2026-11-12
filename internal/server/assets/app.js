@@ -11,6 +11,7 @@
     projects: [],
     composeFiles: [],
     system: null,
+    top: { cpu: [], memory: [] },
     history: { cpu: [], mem: [], labels: [] },
     activeContainer: null,
     drawerTab: "overview",
@@ -124,7 +125,10 @@
     const meta = viewMeta[view] || ["", ""];
     $("#view-title").textContent = meta[0];
     $("#view-sub").textContent = meta[1];
-    if (view === "dashboard") loadSystem();
+    if (view === "dashboard") {
+      loadSystem();
+      loadTop(true);
+    }
     if (view === "containers") loadContainers();
     if (view === "images") loadImages();
     if (view === "networks") loadNetworks();
@@ -139,6 +143,7 @@
     } catch (_) {}
     updateEnginePill();
     await Promise.all([loadSystem(true), loadContainers(true), loadImages(true), loadNetworks(true), loadVolumes(true), loadCompose(true)]);
+    loadTop(true);
     startSystemStream();
   }
 
@@ -340,6 +345,94 @@
       } catch (_) {}
     });
     es.onerror = () => {};
+  }
+
+  /* ---------------- TOP rankings ---------------- */
+
+  async function loadTop(silent = false) {
+    try {
+      const data = await api("/api/containers/top?limit=10");
+      state.top = { cpu: data.cpu || [], memory: data.memory || [] };
+      renderTop();
+    } catch (err) {
+      if (!silent) toast(`排名加载失败: ${err.message}`, "err");
+    }
+  }
+
+  function renderTop() {
+    const renderRank = (rows, kind) => {
+      const table = kind === "cpu" ? $("#top-cpu-table") : $("#top-mem-table");
+      const empty = kind === "cpu" ? $("#top-cpu-empty") : $("#top-mem-empty");
+      if (!table || !empty) return;
+      const body = table.querySelector("tbody");
+      empty.classList.toggle("hidden", rows.length > 0);
+      table.classList.toggle("hidden", rows.length === 0);
+      const hint = kind === "cpu" ? $("#top-cpu-hint") : $("#top-mem-hint");
+      if (hint) hint.textContent = `运行中 ${rows.length} 个容器`;
+
+      const max = rows.reduce((acc, r) => {
+        const v = kind === "cpu" ? r.cpuPercent || 0 : r.memUsage || 0;
+        return Math.max(acc, v);
+      }, 0);
+
+      body.innerHTML = rows
+        .map((r, i) => {
+          const value = kind === "cpu" ? r.cpuPercent || 0 : r.memUsage || 0;
+          const pct = max > 0 ? (value / max) * 100 : 0;
+          const valueText =
+            kind === "cpu"
+              ? `${fmtPercent(r.cpuPercent)}%`
+              : `${fmtBytes(r.memUsage)}${r.memPercent ? ` · ${fmtPercent(r.memPercent)}%` : ""}`;
+          return `<tr data-id="${esc(r.id)}">
+            <td class="rank-col"><span class="rank-no">${i + 1}</span></td>
+            <td><div class="rank-name">${esc(r.name)}</div><div class="mono">${esc(shortId(r.id))}</div></td>
+            <td class="rank-pid mono">${r.pid ? esc(r.pid) : "—"}</td>
+            <td class="rank-cmd mono" data-cmd="${esc(r.command || "—")}">${esc(r.command || "—")}</td>
+            <td class="rank-value mono">${valueText}</td>
+            <td class="rank-bar-col"><div class="bar"><i class="rank-fill ${kind === "cpu" ? "cpu" : "mem"}" style="width:${Math.min(100, pct)}%"></i></div></td>
+          </tr>`;
+        })
+        .join("");
+
+      body.querySelectorAll("tr").forEach((tr) => {
+        tr.addEventListener("click", () => openDrawer(tr.dataset.id));
+      });
+      body.querySelectorAll(".rank-cmd").forEach((cell) => {
+        cell.addEventListener("mouseenter", (e) => showCmdTip(e.currentTarget));
+        cell.addEventListener("mouseleave", hideCmdTip);
+      });
+    };
+
+    renderRank(state.top.cpu || [], "cpu");
+    renderRank(state.top.memory || [], "mem");
+  }
+
+  function showCmdTip(cell) {
+    const text = cell.dataset.cmd || "";
+    if (!text || cell.scrollWidth <= cell.clientWidth + 1) return;
+    const tip = $("#cmd-tip");
+    tip.textContent = text;
+    tip.classList.remove("hidden");
+    const rect = cell.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+    let left = rect.left;
+    if (left + tipRect.width > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - tipRect.width - 12);
+    }
+    let top = rect.bottom + 8;
+    if (top + tipRect.height > window.innerHeight - 12) {
+      top = rect.top - tipRect.height - 8;
+    }
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(12, top)}px`;
+    tip.dataset.active = "1";
+  }
+
+  function hideCmdTip() {
+    const tip = $("#cmd-tip");
+    if (!tip) return;
+    tip.classList.add("hidden");
+    delete tip.dataset.active;
   }
 
   /* ---------------- Containers ---------------- */
@@ -1185,6 +1278,7 @@ volumes:
     $("#goto-containers").addEventListener("click", () => switchView("containers"));
     $("#refresh-btn").addEventListener("click", () => {
       loadSystem();
+      loadTop(true);
       loadContainers(true);
       loadImages(true);
       loadNetworks(true);
@@ -1238,16 +1332,22 @@ volumes:
 
     window.addEventListener("resize", () => {
       drawChart();
+      hideCmdTip();
       if (state.termFit) {
         try { state.termFit.fit(); } catch (_) {}
       }
     });
+    window.addEventListener("scroll", hideCmdTip, true);
 
     setInterval(() => {
       if (state.view === "containers" && $("#auto-refresh-containers").checked) {
         loadContainers(true);
       }
     }, 5000);
+
+    setInterval(() => {
+      if (state.view === "dashboard") loadTop(true);
+    }, 6000);
 
     setInterval(() => {
       if (state.activeContainer && state.drawerTab === "overview" && !$("#container-drawer").classList.contains("hidden")) {
